@@ -776,11 +776,11 @@ export default function PresupuestadorPage() {
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      min={0}
-                      step={0.5}
+                      min={1}
+                      step={1}
                       placeholder="0"
                       value={cotizacionHoras}
-                      onChange={e => setCotizacionHoras(e.target.value)}
+                      onChange={e => setCotizacionHoras(e.target.value === "" ? "" : String(Math.max(1, Math.floor(parseFloat(e.target.value) || 1))))}
                       className="flex-1 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                     />
                     <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">horas</span>
