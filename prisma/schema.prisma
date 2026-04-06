@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  name           String
+  email          String     @unique
+  password       String
+  role           String     @default("agent")
+  teamId         String?
+  team           Team?      @relation(fields: [teamId], references: [id])
+  diasVacaciones Int        @default(15)
+  calle          String?
+  localidad      String?
+  provincia      String?
+  celular        String?
+  vacaciones     Vacacion[]
+  guardias1      Guardia[]  @relation("Guardia1Agent")
+  guardias2      Guardia[]  @relation("Guardia2Agent")
+  createdAt      DateTime   @default(now())
+}
+
+model Team {
+  id       String    @id @default(cuid())
+  name     String
+  users    User[]
+  guardias Guardia[]
+}
+
+model Guardia {
+  id         String   @id @default(cuid())
+  weekStart  DateTime
+  teamId     String
+  team       Team     @relation(fields: [teamId], references: [id])
+  guardia1Id String?
+  guardia1   User?    @relation("Guardia1Agent", fields: [guardia1Id], references: [id])
+  guardia2Id String?
+  guardia2   User?    @relation("Guardia2Agent", fields: [guardia2Id], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([teamId, weekStart])
+}
+
+model PrecioSoporte {
+  id        String   @id @default(cuid())
+  categoria String
+  subtipo   String?
+  concepto  String
+  label     String
+  valor     Float
+  orden     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model RespuestaRapida {
+  id        String   @id @default(cuid())
+  segmento  String
+  titulo    String
+  detalle   String
+  orden     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vacacion {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fecha     DateTime
+  nota      String?
+  aprobado  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, fecha])
+}
+
+model TareaValor {
+  id                String   @id @default(cuid())
+  nombre            String
+  premium           String
+  basico            String
+  porCasos          String
+  sinSoporte        String
+  orderAdvanced     String   @default("-")
+  categoriaEspecial String?
+  orden             Int      @default(0)
+  updatedAt         DateTime @updatedAt
+}
+
+model ClienteBasico {
+  id        String          @id @default(cuid())
+  empresa   String          @unique
+  equipo    String
+  llamadas  LlamadaBasico[]
+  createdAt DateTime        @default(now())
+}
+
+model LlamadaBasico {
+  id          String        @id @default(cuid())
+  clienteId   String
+  cliente     ClienteBasico @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  motivo      String
+  descripcion String
+  ticket      String
+  modulo      String?
+  agente      String
+  agenteId    String
+  mes         String
+  createdAt   DateTime      @default(now())
+}
