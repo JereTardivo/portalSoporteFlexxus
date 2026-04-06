@@ -129,6 +129,9 @@ export default function PresupuestadorPage() {
   const [cantidad, setCantidad] = useState(1);
   const [infraTipo, setInfraTipo] = useState<"datacenter" | "servidor_propio" | null>(null);
   const [selectedStack, setSelectedStack] = useState<string | null>(null);
+  const [cotizacionMode, setCotizacionMode] = useState<"horas" | "monto">("horas");
+  const [cotizacionHoras, setCotizacionHoras] = useState<string>("");
+  const [cotizacionMonto, setCotizacionMonto] = useState<string>("");
 
   // Client data
   const [razonSocial, setRazonSocial] = useState("");
@@ -176,7 +179,9 @@ export default function PresupuestadorPage() {
   useEffect(() => {
     setInfraTipo(null);
     setSelectedStack(null);
-  }, [selectedTareaId]);
+    setCotizacionHoras("");
+    setCotizacionMonto("");
+  }, [selectedTareaId, soporte]);
 
   useEffect(() => {
     Promise.all([
@@ -206,6 +211,30 @@ export default function PresupuestadorPage() {
 
   const isLecturaBD = tarea?.nombre.toLowerCase().includes("usuario de lectura") ?? false;
   const firebirdStacks = precios.filter(p => p.categoria === "firebird_stack");
+  const isCotizacion = tarea ? (tarea[soporte as keyof Tarea] as string) === "COTIZACION" : false;
+
+  function calcularDesdeHorasCotizacion(h: number): PresupuestoResult {
+    if (modalidad === "solucion_remota") {
+      return {
+        tipo: "calculado",
+        lineas: [{ desc: `${h}h × ${pesos(valorHora)}/h`, valor: h * valorHora }],
+        unitario: h * valorHora,
+      };
+    }
+    if (h <= 1) {
+      return { tipo: "calculado", lineas: [{ desc: "Primer hora", valor: primerHora }], unitario: primerHora };
+    }
+    const restantes = h - 1;
+    const costoR = restantes * horasRestantes;
+    return {
+      tipo: "calculado",
+      lineas: [
+        { desc: "Primer hora", valor: primerHora },
+        { desc: `${restantes}h restante${restantes !== 1 ? "s" : ""} × ${pesos(horasRestantes)}/h`, valor: costoR },
+      ],
+      unitario: primerHora + costoR,
+    };
+  }
 
   const presupuesto = useMemo<PresupuestoResult>(() => {
     if (!tarea) return { tipo: "no_aplica" };
@@ -224,15 +253,28 @@ export default function PresupuestadorPage() {
           unitario: base.unitario + stackP.valor,
         };
       }
-      // Base is no_aplica / cotización / etc. — show only stack
       return {
         tipo: "calculado",
         lineas: [{ desc: `Stack ${stackP.concepto.toUpperCase()} — Datacenter (mensual)`, valor: stackP.valor }],
         unitario: stackP.valor,
       };
     }
-    return calcularResultado(tarea, soporte, modalidad, valorHora, primerHora, horasRestantes, precios);
-  }, [tarea, soporte, modalidad, valorHora, primerHora, horasRestantes, precios, isLecturaBD, infraTipo, selectedStack, firebirdStacks]);
+    const base = calcularResultado(tarea, soporte, modalidad, valorHora, primerHora, horasRestantes, precios);
+    if (base.tipo === "cotizacion") {
+      if (cotizacionMode === "monto") {
+        const v = parseFloat(cotizacionMonto.replace(",", "."));
+        if (!isNaN(v) && v > 0) {
+          return { tipo: "calculado", lineas: [{ desc: tarea.nombre, valor: v }], unitario: v };
+        }
+      } else {
+        const h = parseFloat(cotizacionHoras.replace(",", "."));
+        if (!isNaN(h) && h > 0) {
+          return calcularDesdeHorasCotizacion(h);
+        }
+      }
+    }
+    return base;
+  }, [tarea, soporte, modalidad, valorHora, primerHora, horasRestantes, precios, isLecturaBD, infraTipo, selectedStack, firebirdStacks, cotizacionMode, cotizacionHoras, cotizacionMonto]);
 
   const filteredTareas = tareas.filter(t =>
     !search || t.nombre.toLowerCase().includes(search.toLowerCase())
@@ -699,6 +741,71 @@ export default function PresupuestadorPage() {
                 </span>
               </div>
             </div>
+
+            {/* Cotización custom input */}
+            {isCotizacion && (
+              <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2.5">
+                <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-400 uppercase tracking-wide">
+                  Cotización personalizada
+                </p>
+                {/* Mode toggle */}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setCotizacionMode("horas")}
+                    className={`flex-1 text-xs py-1.5 rounded-md font-semibold transition-all ${
+                      cotizacionMode === "horas"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-amber-300"
+                    }`}
+                  >
+                    Por horas
+                  </button>
+                  <button
+                    onClick={() => setCotizacionMode("monto")}
+                    className={`flex-1 text-xs py-1.5 rounded-md font-semibold transition-all ${
+                      cotizacionMode === "monto"
+                        ? "bg-amber-500 text-white shadow-sm"
+                        : "bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-amber-300"
+                    }`}
+                  >
+                    Monto fijo
+                  </button>
+                </div>
+                {/* Input */}
+                {cotizacionMode === "horas" ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      placeholder="0"
+                      value={cotizacionHoras}
+                      onChange={e => setCotizacionHoras(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    />
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">horas</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">$</span>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={cotizacionMonto}
+                      onChange={e => setCotizacionMonto(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+                )}
+                {cotizacionMode === "horas" && cotizacionHoras && parseFloat(cotizacionHoras) > 0 && valorHora === 0 && (
+                  <p className="text-[10px] text-amber-700 dark:text-amber-400 italic">
+                    Sin precio/hora configurado para este tipo y modalidad.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
                 <button
