@@ -9,9 +9,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const tareas = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT id, nombre, premium, basico, porCasos, sinSoporte, orderAdvanced, categoriaEspecial, orden, updatedAt FROM TareaValor ORDER BY orden ASC`
-  );
+  const tareas = await prisma.tareaValor.findMany({ orderBy: { orden: "asc" } });
   return NextResponse.json(tareas);
 }
 
