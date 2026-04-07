@@ -213,31 +213,32 @@ export default function PresupuestadorPage() {
   const firebirdStacks = precios.filter(p => p.categoria === "firebird_stack");
   const isCotizacion = tarea ? (tarea[soporte as keyof Tarea] as string) === "COTIZACION" : false;
 
-  function calcularDesdeHorasCotizacion(h: number): PresupuestoResult {
-    if (modalidad === "solucion_remota") {
-      return {
-        tipo: "calculado",
-        lineas: [{ desc: `${h}h × ${pesos(valorHora)}/h`, valor: h * valorHora }],
-        unitario: h * valorHora,
-      };
-    }
-    if (h <= 1) {
-      return { tipo: "calculado", lineas: [{ desc: "Primer hora", valor: primerHora }], unitario: primerHora };
-    }
-    const restantes = h - 1;
-    const costoR = restantes * horasRestantes;
-    return {
-      tipo: "calculado",
-      lineas: [
-        { desc: "Primer hora", valor: primerHora },
-        { desc: `${restantes}h restante${restantes !== 1 ? "s" : ""} × ${pesos(horasRestantes)}/h`, valor: costoR },
-      ],
-      unitario: primerHora + costoR,
-    };
-  }
-
   const presupuesto = useMemo<PresupuestoResult>(() => {
     if (!tarea) return { tipo: "no_aplica" };
+
+    function calcHorasCotizacion(h: number): PresupuestoResult {
+      if (modalidad === "solucion_remota") {
+        return {
+          tipo: "calculado",
+          lineas: [{ desc: `${h}h × ${pesos(valorHora)}/h`, valor: h * valorHora }],
+          unitario: h * valorHora,
+        };
+      }
+      if (h <= 1) {
+        return { tipo: "calculado", lineas: [{ desc: "Primer hora", valor: primerHora }], unitario: primerHora };
+      }
+      const restantes = h - 1;
+      const costoR = restantes * horasRestantes;
+      return {
+        tipo: "calculado",
+        lineas: [
+          { desc: "Primer hora", valor: primerHora },
+          { desc: `${restantes}h restante${restantes !== 1 ? "s" : ""} × ${pesos(horasRestantes)}/h`, valor: costoR },
+        ],
+        unitario: primerHora + costoR,
+      };
+    }
+
     if (isLecturaBD && infraTipo === "datacenter") {
       if (!selectedStack) return { tipo: "no_aplica" };
       const stackP = firebirdStacks.find(s => s.concepto === selectedStack);
@@ -259,6 +260,7 @@ export default function PresupuestadorPage() {
         unitario: stackP.valor,
       };
     }
+
     const base = calcularResultado(tarea, soporte, modalidad, valorHora, primerHora, horasRestantes, precios);
     if (base.tipo === "cotizacion") {
       if (cotizacionMode === "monto") {
@@ -269,7 +271,7 @@ export default function PresupuestadorPage() {
       } else {
         const h = parseFloat(cotizacionHoras.replace(",", "."));
         if (!isNaN(h) && h > 0) {
-          return calcularDesdeHorasCotizacion(h);
+          return calcHorasCotizacion(h);
         }
       }
     }
