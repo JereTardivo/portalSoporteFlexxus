@@ -119,30 +119,30 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onMobileClose }: SidebarProps) {
+function NavLink({ item, collapsed, onMobileClose }: { item: typeof navItems[0]; collapsed: boolean; onMobileClose: () => void }) {
   const pathname = usePathname();
+  const active = pathname === item.href || pathname.startsWith(item.href + "/");
+  return (
+    <Link
+      href={item.href}
+      onClick={onMobileClose}
+      title={collapsed ? item.label : undefined}
+      className={cn(
+        "flex items-center rounded-lg text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
+        active ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+      )}
+    >
+      <span className="flex-shrink-0">{item.icon}</span>
+      {!collapsed && <span>{item.label}</span>}
+    </Link>
+  );
+}
+
+export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onMobileClose }: SidebarProps) {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "admin";
   const { theme, toggleTheme } = useTheme();
-
-  function NavLink({ item, isAdminSection }: { item: typeof navItems[0]; isAdminSection?: boolean }) {
-    const active = pathname === item.href || pathname.startsWith(item.href + "/");
-    return (
-      <Link
-        href={item.href}
-        onClick={onMobileClose}
-        title={collapsed ? item.label : undefined}
-        className={cn(
-          "flex items-center rounded-lg text-sm font-medium transition-colors",
-          collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
-          active ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
-        )}
-      >
-        <span className="flex-shrink-0">{item.icon}</span>
-        {!collapsed && <span>{item.label}</span>}
-      </Link>
-    );
-  }
 
   const sidebarContent = (
     <div className={cn(
@@ -175,7 +175,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onMob
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto scrollbar-thin">
-        {navItems.map(item => <NavLink key={item.href} item={item} />)}
+        {navItems.map(item => <NavLink key={item.href} item={item} collapsed={collapsed} onMobileClose={onMobileClose} />)}
         {isAdmin && (
           <>
             {!collapsed && (
@@ -186,7 +186,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onMob
               </div>
             )}
             {collapsed && <div className="pt-2 pb-1 border-t border-slate-700/50 mx-2" />}
-            {adminItems.map(item => <NavLink key={item.href} item={item} isAdminSection />)}
+            {adminItems.map(item => <NavLink key={item.href} item={item} collapsed={collapsed} onMobileClose={onMobileClose} />)}
           </>
         )}
       </nav>
@@ -268,13 +268,13 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onMob
             </button>
           </div>
           <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-            {navItems.map(item => <NavLink key={item.href} item={item} />)}
+            {navItems.map(item => <NavLink key={item.href} item={item} collapsed={false} onMobileClose={onMobileClose} />)}
             {isAdmin && (
               <>
                 <div className="pt-4 pb-1 px-3">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Administración</p>
                 </div>
-                {adminItems.map(item => <NavLink key={item.href} item={item} />)}
+                {adminItems.map(item => <NavLink key={item.href} item={item} collapsed={false} onMobileClose={onMobileClose} />)}
               </>
             )}
           </nav>
