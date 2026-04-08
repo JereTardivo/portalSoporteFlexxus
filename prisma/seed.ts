@@ -6,21 +6,22 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Seeding database...");
 
-  // Clean slate — order matters due to FK constraints
-  await prisma.guardia.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.team.deleteMany();
+  // Find-or-create teams by name (preserves IDs on re-run so sessions stay valid)
+  async function findOrCreateTeam(name: string) {
+    const existing = await prisma.team.findFirst({ where: { name } });
+    if (existing) return existing;
+    return prisma.team.create({ data: { name } });
+  }
 
-  // Create teams
   const [eq1, eq2, eq3, eq4, eq5, corralon] = await Promise.all([
-    prisma.team.create({ data: { name: "Equipo 1" } }),
-    prisma.team.create({ data: { name: "Equipo 2" } }),
-    prisma.team.create({ data: { name: "Equipo 3" } }),
-    prisma.team.create({ data: { name: "Equipo 4" } }),
-    prisma.team.create({ data: { name: "Equipo 5" } }),
-    prisma.team.create({ data: { name: "Equipo Corralón" } }),
+    findOrCreateTeam("Equipo 1"),
+    findOrCreateTeam("Equipo 2"),
+    findOrCreateTeam("Equipo 3"),
+    findOrCreateTeam("Equipo 4"),
+    findOrCreateTeam("Equipo 5"),
+    findOrCreateTeam("Equipo Corralón"),
   ]);
-  console.log("✅ Teams created");
+  console.log("✅ Teams ready");
 
   const pwd = await bcrypt.hash("flexxus2024", 10);
 
@@ -82,10 +83,12 @@ async function main() {
   ];
 
   for (const u of allUsers) {
-    await prisma.user.create({
-      data: { name: u.name, email: u.email, password: pwd, role: u.role, teamId: u.teamId, diasVacaciones: u.diasVacaciones },
+    await prisma.user.upsert({
+      where:  { email: u.email },
+      update: { name: u.name, role: u.role, teamId: u.teamId, diasVacaciones: u.diasVacaciones },
+      create: { name: u.name, email: u.email, password: pwd, role: u.role, teamId: u.teamId, diasVacaciones: u.diasVacaciones },
     });
-    console.log(`✅ User created: ${u.name} (${u.role})`);
+    console.log(`✅ User upserted: ${u.name} (${u.role})`);
   }
 
   // Seed precios

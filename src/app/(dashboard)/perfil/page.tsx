@@ -44,8 +44,9 @@ export default function PerfilPage() {
 
   useEffect(() => {
     fetch("/api/profile")
-      .then((r) => r.json())
-      .then((data: ProfileData) => {
+      .then(async (r) => {
+        if (!r.ok) return;
+        const data: ProfileData = await r.json();
         setProfile(data);
         setCalle(data.calle ?? "");
         setProvincia(data.provincia ?? "");
