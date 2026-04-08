@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 132" width="32" height="32">
+  <defs>
+    <linearGradient id="fx-red-icon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff3b3b" />
+      <stop offset="100%" stop-color="#e1262d" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="132" height="132" rx="24" fill="#ffffff" />
+  <g transform="translate(0 2)">
+    <g stroke="#5d6168" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M40 14 L92 14 L118 58 L92 102 L40 102 L14 58 Z" />
+      <path d="M40 14 L40 102" />
+      <path d="M92 14 L92 102" />
+      <path d="M14 58 L118 58" />
+      <path d="M40 14 L66 58 L40 102" />
+      <path d="M92 14 L66 58 L92 102" />
+    </g>
+    <circle cx="40" cy="14" r="10" fill="#ef2b2d" stroke="#5d6168" stroke-width="4" />
+    <circle cx="92" cy="14" r="10" fill="#f4f4f5" stroke="#5d6168" stroke-width="4" />
+    <circle cx="118" cy="58" r="10" fill="#ef2b2d" stroke="#5d6168" stroke-width="4" />
+    <circle cx="92" cy="102" r="10" fill="#f4f4f5" stroke="#5d6168" stroke-width="4" />
+    <circle cx="40" cy="102" r="10" fill="#f4f4f5" stroke="#5d6168" stroke-width="4" />
+    <circle cx="14" cy="58" r="10" fill="#ef2b2d" stroke="#5d6168" stroke-width="4" />
+    <circle cx="66" cy="58" r="16" fill="url(#fx-red-icon)" stroke="#ffffff" stroke-width="5" />
+  </g>
+</svg>
