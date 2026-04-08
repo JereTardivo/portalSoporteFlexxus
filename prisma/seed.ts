@@ -153,6 +153,33 @@ async function main() {
       valor: 590895,
       orden: 7,
     },
+    {
+      id: "precio-firebird-micro",
+      categoria: "firebird_stack",
+      subtipo: null,
+      concepto: "micro",
+      label: "Firebird 1.5G + Datos 0.5G — 2 CPUs · Sincro 1x día",
+      valor: 114742.82,
+      orden: 8,
+    },
+    {
+      id: "precio-firebird-pequena",
+      categoria: "firebird_stack",
+      subtipo: null,
+      concepto: "pequeña",
+      label: "Firebird 2G + Datos 0.5G — 2 CPUs · Sincro 1x día",
+      valor: 123326.69,
+      orden: 9,
+    },
+    {
+      id: "precio-firebird-mediano",
+      categoria: "firebird_stack",
+      subtipo: null,
+      concepto: "mediano",
+      label: "Firebird 4G + Datos 0.5G — 3 CPUs · Sincro 2x día",
+      valor: 147735.58,
+      orden: 10,
+    },
   ];
 
   for (const precio of precios) {
