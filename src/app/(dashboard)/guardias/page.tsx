@@ -17,6 +17,7 @@ interface Guardia {
   guardia2Id?: string | null;
   guardia1?: Agent | null;
   guardia2?: Agent | null;
+  aprobada?: boolean;
 }
 
 interface Team {
@@ -35,6 +36,7 @@ export default function GuardiasPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [approving, setApproving] = useState<string | null>(null);
   const [toast, setToast] = useState("");
 
   function showToast(msg: string) {
@@ -109,7 +111,22 @@ export default function GuardiasPage() {
     setSaving(null);
   }
 
-  // Generate saturdays for the year
+  async function toggleAprobada(guardia: Guardia) {
+    if (!guardia.id) return;
+    setApproving(guardia.id);
+    const res = await fetch("/api/guardias", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: guardia.id, aprobada: !guardia.aprobada }),
+    });
+    if (res.ok) {
+      const updated: Guardia = await res.json();
+      setGuardias((prev) => prev.map((g) => g.id === updated.id ? updated : g));
+      showToast(updated.aprobada ? "Guardia aprobada" : "Guardia desbloqueada");
+    }
+    setApproving(null);
+  }
+
   const saturdays = getSaturdaysOfYear(year);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -185,6 +202,7 @@ export default function GuardiasPage() {
                 <th className="px-4 py-3 text-left font-bold text-slate-700 dark:text-slate-200 w-32">SÁBADO</th>
                 <th className="px-4 py-3 text-left font-bold text-blue-700">GUARDIA 1</th>
                 <th className="px-4 py-3 text-left font-bold text-purple-700">GUARDIA 2</th>
+                <th className="px-4 py-3 text-center font-bold text-slate-600 dark:text-slate-300 w-28">ESTADO</th>
               </tr>
             </thead>
             <tbody>
@@ -192,10 +210,13 @@ export default function GuardiasPage() {
                 sats.map((sat, i) => {
                   const isToday = sat.toDateString() === today.toDateString();
                   const isPast = sat < today;
+                  const isFuture = sat > today;
                   const guardia = getGuardia(sat);
                   const dateStr = sat.toISOString();
                   const g1Key = `${dateStr}-guardia1Id`;
                   const g2Key = `${dateStr}-guardia2Id`;
+                  const isAprobada = guardia?.aprobada ?? false;
+                  const canEdit = isAdmin ? true : (isFuture && !isAprobada);
 
                   return (
                     <tr
@@ -231,7 +252,7 @@ export default function GuardiasPage() {
                         )}
                       </td>
                       <td className="px-4 py-2">
-                        {isAdmin ? (
+                        {canEdit ? (
                           <select
                             value={guardia?.guardia1Id ?? ""}
                             onChange={(e) => saveGuardia(sat, "guardia1Id", e.target.value)}
@@ -250,7 +271,7 @@ export default function GuardiasPage() {
                         )}
                       </td>
                       <td className="px-4 py-2">
-                        {isAdmin ? (
+                        {canEdit ? (
                           <select
                             value={guardia?.guardia2Id ?? ""}
                             onChange={(e) => saveGuardia(sat, "guardia2Id", e.target.value)}
@@ -266,6 +287,45 @@ export default function GuardiasPage() {
                           <span className={`font-medium ${guardia?.guardia2 ? "text-purple-700" : "text-slate-400"}`}>
                             {guardia?.guardia2?.name ?? "-"}
                           </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {isPast ? (
+                          <span className="text-xs text-slate-400 italic">—</span>
+                        ) : isAdmin ? (
+                          <button
+                            onClick={() => guardia && toggleAprobada(guardia)}
+                            disabled={!guardia?.id || approving === guardia?.id}
+                            title={isAprobada ? "Desbloquear para edición" : "Aprobar guardia"}
+                            className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border transition-all disabled:opacity-50 ${
+                              isAprobada
+                                ? "bg-green-100 border-green-300 text-green-700 hover:bg-green-200"
+                                : "bg-slate-100 border-slate-300 text-slate-500 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700"
+                            }`}
+                          >
+                            {approving === guardia?.id ? (
+                              <span>...</span>
+                            ) : isAprobada ? (
+                              <>
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                Aprobada
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m9-7V8a3 3 0 00-3-3H8a3 3 0 00-3 3v2" /></svg>
+                                Aprobar
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          isAprobada ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 border border-green-300 text-green-700">
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                              Aprobada
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Pendiente</span>
+                          )
                         )}
                       </td>
                     </tr>

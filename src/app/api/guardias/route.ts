@@ -35,37 +35,72 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "admin") {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const isAdmin = session.user.role === "admin";
 
   try {
     const { teamId, weekStart, guardia1Id, guardia2Id } = await request.json();
+    const weekDate = new Date(weekStart);
+
+    if (!isAdmin) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (weekDate <= today) {
+        return NextResponse.json({ error: "No podés modificar guardias pasadas" }, { status: 403 });
+      }
+      const existing = await prisma.guardia.findUnique({
+        where: { teamId_weekStart: { teamId, weekStart: weekDate } },
+        select: { aprobada: true },
+      });
+      if (existing?.aprobada) {
+        return NextResponse.json({ error: "Esta guardia ya fue aprobada" }, { status: 403 });
+      }
+    }
 
     const guardia = await prisma.guardia.upsert({
-      where: {
-        teamId_weekStart: {
-          teamId,
-          weekStart: new Date(weekStart),
-        },
-      },
+      where: { teamId_weekStart: { teamId, weekStart: weekDate } },
       update: {
         guardia1Id: guardia1Id || null,
         guardia2Id: guardia2Id || null,
       },
       create: {
         teamId,
-        weekStart: new Date(weekStart),
+        weekStart: weekDate,
         guardia1Id: guardia1Id || null,
         guardia2Id: guardia2Id || null,
       },
       include: {
         guardia1: { select: { id: true, name: true } },
         guardia2: { select: { id: true, name: true } },
+        team:     { select: { id: true, name: true } },
       },
     });
     return NextResponse.json(guardia);
   } catch {
     return NextResponse.json({ error: "Error al guardar guardia" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "admin") {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+
+  try {
+    const { id, aprobada } = await request.json();
+    const guardia = await prisma.guardia.update({
+      where: { id },
+      data:  { aprobada },
+      include: {
+        guardia1: { select: { id: true, name: true } },
+        guardia2: { select: { id: true, name: true } },
+        team:     { select: { id: true, name: true } },
+      },
+    });
+    return NextResponse.json(guardia);
+  } catch {
+    return NextResponse.json({ error: "Error al actualizar guardia" }, { status: 500 });
   }
 }
