@@ -58,18 +58,45 @@ export default function GuardiasPage() {
       });
   }, [session]);
 
-  const loadGuardias = useCallback(() => {
+  const loadGuardias = useCallback((silent = false) => {
     if (!selectedTeam) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     fetch(`/api/guardias?teamId=${selectedTeam.id}&year=${year}`)
       .then((r) => r.json())
       .then((data: Guardia[]) => setGuardias(data))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [selectedTeam, year]);
 
   useEffect(() => {
     loadGuardias();
   }, [loadGuardias]);
+
+  // Mantiene la vista sincronizada entre agentes: refresca en segundo plano
+  // (sin disparar el estado de "loading") cada pocos segundos y al volver
+  // a la pestaña, para que los cambios de otros agentes se vean sin F5.
+  useEffect(() => {
+    if (!selectedTeam) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadGuardias(true);
+      }
+    }, 6000);
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        loadGuardias(true);
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [selectedTeam, loadGuardias]);
 
   async function saveGuardia(weekStart: Date, field: "guardia1Id" | "guardia2Id", agentId: string) {
     if (!selectedTeam) return;

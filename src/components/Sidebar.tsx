@@ -72,6 +72,15 @@ const navItems = [
     ),
   },
   {
+    href: "/claves",
+    label: "Claves de Acceso",
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 11-12 0 6 6 0 0112 0zM3 21l6.5-6.5" />
+      </svg>
+    ),
+  },
+  {
     href: "/presupuestador",
     label: "Presupuestador",
     icon: (

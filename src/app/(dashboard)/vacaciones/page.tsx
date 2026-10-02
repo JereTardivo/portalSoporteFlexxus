@@ -36,6 +36,8 @@ export default function VacacionesPage() {
   // ── Agent / own state ──
   const [ownVacaciones, setOwnVacaciones] = useState<Vacacion[]>([]);
   const [ownDiasTotales, setOwnDiasTotales] = useState(15);
+  // Agente: alterna entre marcar sus propios días o ver el calendario de todo el equipo (solo lectura)
+  const [agentViewMode, setAgentViewMode] = useState<"own" | "team">("own");
 
   // ── Admin state ──
   const [allTeams, setAllTeams] = useState<TeamType[]>([]);
@@ -56,14 +58,18 @@ export default function VacacionesPage() {
   }, []);
 
   // Load own vacations (agent) or own data (gerente via "self" option)
-  useEffect(() => {
+  const loadOwnVacaciones = useCallback((silent = false) => {
     if (!session || isAdmin) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     fetch(`/api/vacaciones?year=${year}`)
       .then(r => r.json())
       .then(data => { setOwnVacaciones(data.vacaciones ?? []); setOwnDiasTotales(data.diasTotales ?? 15); })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, [session, isAdmin, year]);
+
+  useEffect(() => { loadOwnVacaciones(); }, [loadOwnVacaciones]);
 
   // Load teams list for gerente
   useEffect(() => {
@@ -80,17 +86,52 @@ export default function VacacionesPage() {
     if (sessionTeamId) setSelectedTeamId(sessionTeamId);
   }, [session, isAdmin, isGerente, sessionTeamId]);
 
-  // Load team data (admin)
-  const loadTeamData = useCallback(() => {
-    if (!selectedTeamId || !isAdmin) return;
-    setLoading(true);
+  // Set team for agente (auto) — necesario para poder ver el calendario del equipo
+  useEffect(() => {
+    if (!session || isAdmin) return;
+    if (sessionTeamId) setSelectedTeamId(sessionTeamId);
+  }, [session, isAdmin, sessionTeamId]);
+
+  // Load team data (admin siempre; agente solo cuando elige ver el equipo)
+  const loadTeamData = useCallback((silent = false) => {
+    if (!selectedTeamId) return;
+    if (!isAdmin && agentViewMode !== "team") return;
+    if (!silent) setLoading(true);
     fetch(`/api/vacaciones?teamId=${selectedTeamId}&year=${year}`)
       .then(r => r.json())
       .then(data => setTeamMembers(data.teamData ?? []))
-      .finally(() => setLoading(false));
-  }, [selectedTeamId, year, isAdmin]);
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
+  }, [selectedTeamId, year, isAdmin, agentViewMode]);
 
   useEffect(() => { loadTeamData(); }, [loadTeamData]);
+
+  // Mantiene el calendario sincronizado entre agentes/líderes: refresca en
+  // segundo plano cada pocos segundos y al volver a la pestaña, para que
+  // marcaciones y aprobaciones de otros se vean sin F5.
+  useEffect(() => {
+    if (!session) return;
+
+    function refreshSilently() {
+      loadOwnVacaciones(true);
+      loadTeamData(true);
+    }
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refreshSilently();
+    }, 6000);
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") refreshSilently();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [session, loadOwnVacaciones, loadTeamData]);
 
   // Reset agent filter when team changes
   useEffect(() => { setSelectedAgentId("all"); }, [selectedTeamId]);
@@ -119,7 +160,7 @@ export default function VacacionesPage() {
     [selectedAgentId, teamMembersWithColor]
   );
 
-  const isTeamView = isAdmin && selectedAgentId === "all";
+  const isTeamView = isAdmin ? selectedAgentId === "all" : agentViewMode === "team";
 
   // ── Toggle own vacation (agent) ──
   async function toggleOwnDay(date: Date) {
@@ -317,7 +358,10 @@ export default function VacacionesPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Vacaciones</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
-            {!isAdmin ? "Registrá tus días de vacaciones. Hacé clic en un día para marcarlo/desmarcarlo."
+            {!isAdmin
+              ? (agentViewMode === "team"
+                ? "Vista del equipo — pasá el cursor sobre un día para ver quién está de vacaciones."
+                : "Registrá tus días de vacaciones. Hacé clic en un día para marcarlo/desmarcarlo.")
               : isTeamView ? "Vista del equipo — pasá el cursor sobre un día para ver quién está de vacaciones."
               : `Editando vacaciones de ${selectedAgent?.userName ?? "—"}`}
           </p>
@@ -328,6 +372,14 @@ export default function VacacionesPage() {
             <select value={selectedTeamId} onChange={e => setSelectedTeamId(e.target.value)}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               {allTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
+          {/* Agente: alternar entre "mis vacaciones" y "ver el equipo" */}
+          {!isAdmin && (
+            <select value={agentViewMode} onChange={e => setAgentViewMode(e.target.value as "own" | "team")}
+              className="px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="own">👤 Mis vacaciones</option>
+              <option value="team">👥 Ver equipo</option>
             </select>
           )}
           {/* Admin: agent selector */}
@@ -374,8 +426,10 @@ export default function VacacionesPage() {
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Referencia del equipo</p>
           <div className="flex flex-wrap gap-3">
             {teamMembersWithColor.map(m => (
-              <button key={m.userId} onClick={() => setSelectedAgentId(m.userId)}
-                className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 hover:text-blue-500 transition-colors">
+              <button key={m.userId}
+                onClick={() => isAdmin && setSelectedAgentId(m.userId)}
+                disabled={!isAdmin}
+                className={`flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 transition-colors ${isAdmin ? "hover:text-blue-500 cursor-pointer" : "cursor-default"}`}>
                 <span className="w-4 h-4 rounded-sm flex-shrink-0" style={{ backgroundColor: m.color }} />
                 <span>{m.userName}</span>
                 {m.vacaciones.length > 0 && (

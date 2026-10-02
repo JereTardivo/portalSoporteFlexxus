@@ -31,13 +31,34 @@ export default function RespuestasPage() {
     loadRespuestas();
   }, []);
 
-  function loadRespuestas() {
-    setLoading(true);
+  function loadRespuestas(silent = false) {
+    if (!silent) setLoading(true);
     fetch("/api/respuestas")
       .then((r) => r.json())
       .then(setRespuestas)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }
+
+  // Mantiene la lista sincronizada entre agentes: refresca en segundo plano
+  // (sin "Cargando...") cada pocos segundos y al volver a la pestaña, para
+  // que las respuestas creadas/editadas por otros se vean sin F5.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadRespuestas(true);
+    }, 6000);
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") loadRespuestas(true);
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   async function copyToClipboard(text: string, id: string) {
     await navigator.clipboard.writeText(text);

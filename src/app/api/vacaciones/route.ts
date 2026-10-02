@@ -17,8 +17,12 @@ export async function GET(request: NextRequest) {
       ? { gte: new Date(`${year}-01-01`), lt: new Date(`${parseInt(year) + 1}-01-01`) }
       : undefined;
 
-    // Team view: return all members' data
-    if (teamId && session.user.role === "admin") {
+    // Team view: return all members' data.
+    // Admins can view any team; regular agents can only view their own team (read-only on the client).
+    const canViewTeam =
+      session.user.role === "admin" || teamId === session.user.teamId;
+
+    if (teamId && canViewTeam) {
       const members = await prisma.user.findMany({
         where: { teamId },
         orderBy: { name: "asc" },
