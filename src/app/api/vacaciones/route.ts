@@ -17,6 +17,58 @@ export async function GET(request: NextRequest) {
       ? { gte: new Date(`${year}-01-01`), lt: new Date(`${parseInt(year) + 1}-01-01`) }
       : undefined;
 
+    const yearNum = year ? parseInt(year) : null;
+
+    // Cuántos años hacia atrás se busca saldo sin tomar para arrastrar al año consultado.
+    const MAX_LOOKBACK_YEARS = 10;
+
+    // Resuelve el cupo de días de un usuario para el año consultado:
+    // - usa el cupo específico de ese año si existe (fijado al renovar vacaciones
+    //   desde el ABM de usuarios); si no, cae al valor por defecto del usuario.
+    // - además suma el saldo no tomado de años anteriores (sin tocar ni borrar
+    //   ningún cupo ni vacación ya cargada, es solo un cálculo de lectura).
+    const resolveDiasTotales = async (targetId: string, fallback: number, createdAt: Date) => {
+      if (!yearNum) return fallback;
+
+      const minYear = Math.max(createdAt.getFullYear(), yearNum - MAX_LOOKBACK_YEARS);
+      if (yearNum <= minYear) {
+        const cupo = await prisma.cupoVacaciones.findUnique({
+          where: { userId_year: { userId: targetId, year: yearNum } },
+        });
+        return cupo?.dias ?? fallback;
+      }
+
+      const [cupos, vacacionesPrevias] = await Promise.all([
+        prisma.cupoVacaciones.findMany({
+          where: { userId: targetId, year: { gte: minYear, lte: yearNum } },
+        }),
+        prisma.vacacion.findMany({
+          where: {
+            userId: targetId,
+            fecha: { gte: new Date(`${minYear}-01-01`), lt: new Date(`${yearNum}-01-01`) },
+          },
+          select: { fecha: true },
+        }),
+      ]);
+
+      const cupoByYear = new Map(cupos.map((c) => [c.year, c.dias]));
+      const tomadosByYear = new Map<number, number>();
+      for (const v of vacacionesPrevias) {
+        const y = new Date(v.fecha).getFullYear();
+        tomadosByYear.set(y, (tomadosByYear.get(y) ?? 0) + 1);
+      }
+
+      let saldoArrastrado = 0;
+      for (let y = minYear; y < yearNum; y++) {
+        const totalAnio = (cupoByYear.get(y) ?? fallback) + saldoArrastrado;
+        const tomadosAnio = tomadosByYear.get(y) ?? 0;
+        saldoArrastrado = Math.max(0, totalAnio - tomadosAnio);
+      }
+
+      const cupoAnioActual = cupoByYear.get(yearNum) ?? fallback;
+      return cupoAnioActual + saldoArrastrado;
+    };
+
     // Team view: return all members' data.
     // Admins can view any team; regular agents can only view their own team (read-only on the client).
     const canViewTeam =
@@ -26,14 +78,14 @@ export async function GET(request: NextRequest) {
       const members = await prisma.user.findMany({
         where: { teamId },
         orderBy: { name: "asc" },
-        select: { id: true, name: true, diasVacaciones: true },
+        select: { id: true, name: true, diasVacaciones: true, createdAt: true },
       });
 
       const teamData = await Promise.all(
         members.map(async (m) => ({
           userId: m.id,
           userName: m.name,
-          diasTotales: m.diasVacaciones,
+          diasTotales: await resolveDiasTotales(m.id, m.diasVacaciones, m.createdAt),
           vacaciones: await prisma.vacacion.findMany({
             where: { userId: m.id, ...(dateFilter ? { fecha: dateFilter } : {}) },
             orderBy: { fecha: "asc" },
@@ -53,10 +105,16 @@ export async function GET(request: NextRequest) {
 
     const [vacaciones, user] = await Promise.all([
       prisma.vacacion.findMany({ where, orderBy: { fecha: "asc" } }),
-      prisma.user.findUnique({ where: { id: targetUserId }, select: { diasVacaciones: true } }),
+      prisma.user.findUnique({ where: { id: targetUserId }, select: { diasVacaciones: true, createdAt: true } }),
     ]);
 
-    return NextResponse.json({ vacaciones, diasTotales: user?.diasVacaciones ?? 15 });
+    const diasTotales = await resolveDiasTotales(
+      targetUserId,
+      user?.diasVacaciones ?? 15,
+      user?.createdAt ?? new Date()
+    );
+
+    return NextResponse.json({ vacaciones, diasTotales });
   } catch {
     return NextResponse.json({ error: "Error al obtener vacaciones" }, { status: 500 });
   }

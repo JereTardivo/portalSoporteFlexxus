@@ -19,6 +19,12 @@ interface User {
   team?: { id: string; name: string } | null;
 }
 
+interface CupoVacaciones {
+  id: string;
+  year: number;
+  dias: number;
+}
+
 const EMPTY_FORM = {
   name: "",
   email: "",
@@ -41,6 +47,14 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+
+  // ── Cupos de vacaciones por año (renovación anual) ──
+  const [cupos, setCupos] = useState<CupoVacaciones[]>([]);
+  const [cuposLoading, setCuposLoading] = useState(false);
+  const [newCupoYear, setNewCupoYear] = useState(new Date().getFullYear() + 1);
+  const [newCupoDias, setNewCupoDias] = useState(15);
+  const [savingCupo, setSavingCupo] = useState(false);
+  const [cupoError, setCupoError] = useState("");
 
   useEffect(() => {
     if (session && session.user.role !== "admin") {
@@ -67,6 +81,7 @@ export default function AdminPage() {
     setEditingUser(null);
     setForm(EMPTY_FORM);
     setError("");
+    setCupos([]);
     setShowModal(true);
   }
 
@@ -81,7 +96,53 @@ export default function AdminPage() {
       diasVacaciones: u.diasVacaciones,
     });
     setError("");
+    setCupoError("");
+    setNewCupoYear(new Date().getFullYear() + 1);
+    setNewCupoDias(u.diasVacaciones);
     setShowModal(true);
+    loadCupos(u.id);
+  }
+
+  function loadCupos(userId: string) {
+    setCuposLoading(true);
+    fetch(`/api/users/${userId}/cupos-vacaciones`)
+      .then((r) => r.json())
+      .then((data: CupoVacaciones[]) => setCupos(Array.isArray(data) ? data : []))
+      .finally(() => setCuposLoading(false));
+  }
+
+  async function saveCupo(year: number, dias: number) {
+    if (!editingUser) return;
+    setSavingCupo(true);
+    setCupoError("");
+    const res = await fetch(`/api/users/${editingUser.id}/cupos-vacaciones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, dias }),
+    });
+    if (res.ok) {
+      const updated: CupoVacaciones = await res.json();
+      setCupos((prev) => {
+        const idx = prev.findIndex((c) => c.year === updated.year);
+        const next = idx >= 0 ? prev.map((c) => (c.year === updated.year ? updated : c)) : [...prev, updated];
+        return next.sort((a, b) => b.year - a.year);
+      });
+      showToast(`Cupo ${year} guardado`);
+    } else {
+      const d = await res.json();
+      setCupoError(d.error ?? "Error al guardar el cupo");
+    }
+    setSavingCupo(false);
+  }
+
+  async function deleteCupo(year: number) {
+    if (!editingUser) return;
+    if (!confirm(`¿Quitar el cupo específico del año ${year}? Volverá a usar el valor por defecto.`)) return;
+    const res = await fetch(`/api/users/${editingUser.id}/cupos-vacaciones?year=${year}`, { method: "DELETE" });
+    if (res.ok) {
+      setCupos((prev) => prev.filter((c) => c.year !== year));
+      showToast(`Cupo ${year} eliminado`);
+    }
   }
 
   async function saveUser() {
@@ -262,6 +323,7 @@ export default function AdminPage() {
                   <input type="number" min={0} max={60} value={form.diasVacaciones}
                     onChange={(e) => setForm((f) => ({ ...f, diasVacaciones: parseInt(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <p className="text-[11px] text-slate-400 mt-1">Valor por defecto para años sin un cupo propio (ver abajo)</p>
                 </div>
               </div>
               <div>
@@ -272,6 +334,70 @@ export default function AdminPage() {
                   {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
+
+              {/* Cupos de vacaciones por año — renovación anual sin afectar años anteriores */}
+              {editingUser && (
+                <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cupo de vacaciones por año</label>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    Para renovar las vacaciones (ej. cada octubre), agregá el cupo del año siguiente. Los años anteriores y los días ya marcados no se modifican.
+                  </p>
+
+                  {cuposLoading ? (
+                    <p className="text-xs text-slate-400 py-1">Cargando cupos...</p>
+                  ) : (
+                    <>
+                      {cupos.length > 0 && (
+                        <div className="space-y-1.5 mb-3">
+                          {cupos.map((c) => (
+                            <div key={c.year} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5">
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{c.year}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-slate-600 dark:text-slate-300">{c.dias} días</span>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteCupo(c.year)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                  title="Quitar cupo de este año"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-end gap-2">
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Año</label>
+                          <input type="number" value={newCupoYear}
+                            onChange={(e) => setNewCupoYear(parseInt(e.target.value) || new Date().getFullYear())}
+                            className="w-24 px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Días</label>
+                          <input type="number" min={0} max={60} value={newCupoDias}
+                            onChange={(e) => setNewCupoDias(parseInt(e.target.value) || 0)}
+                            className="w-20 px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={savingCupo}
+                          onClick={() => saveCupo(newCupoYear, newCupoDias)}
+                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg"
+                        >
+                          {savingCupo ? "Guardando..." : "Guardar cupo"}
+                        </button>
+                      </div>
+                      {cupoError && <p className="text-xs text-red-600 mt-1.5">{cupoError}</p>}
+                    </>
+                  )}
+                </div>
+              )}
+
               {error && (
                 <div className="text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">{error}</div>
               )}

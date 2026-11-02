@@ -21,6 +21,7 @@ model User {
   provincia      String?
   celular        String?
   vacaciones     Vacacion[]
+  cuposVacaciones CupoVacaciones[]
   guardias1      Guardia[]  @relation("Guardia1Agent")
   guardias2      Guardia[]  @relation("Guardia2Agent")
   createdAt      DateTime   @default(now())
@@ -80,6 +81,22 @@ model Vacacion {
   createdAt DateTime @default(now())
 
   @@unique([userId, fecha])
+}
+
+// Cupo de días de vacaciones de un usuario para un año puntual.
+// Permite "renovar" los días de un usuario (ej. cada octubre) sin alterar
+// el cupo histórico de años anteriores ni las vacaciones ya marcadas/aprobadas.
+// Si un año no tiene cupo propio, se usa User.diasVacaciones como valor por defecto.
+model CupoVacaciones {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  dias      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, year])
 }
 
 model TareaValor {
